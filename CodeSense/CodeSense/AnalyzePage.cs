@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Security.Policy;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
@@ -15,11 +16,10 @@ namespace CodeSense
         {
             InitializeComponent();
             selectedLanguage = language;
+
             // Set the label text to show the selected language
             lblLanguage.Text = "Selected Language: " + selectedLanguage;
-            // Set font and size for lblLanguage
             lblLanguage.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
-            // Center lblLanguage horizontally and place it above the text box
             lblLanguage.Location = new Point((ClientSize.Width - lblLanguage.Width) / 2, textBox1.Location.Y - lblLanguage.Height - 10);
         }
 
@@ -28,31 +28,22 @@ namespace CodeSense
         {
             List<string> tokens = new List<string>();
 
-            // Check if the statement contains spaces and doesn't contain commas
-            if (statement.Contains(" ") && !statement.Contains(","))
+            // Check if the statement is wrapped in quotes. If it is, treat it as a single string.
+            if (statement.StartsWith("\"") && statement.EndsWith("\""))
             {
-                tokens.Add($"\"{statement}\""); // Treat everything with spaces as a single string
+                tokens.Add(statement); // Treat everything within quotes as a single string.
                 return tokens;
             }
 
-            // Split by commas to allow separate analysis
-            string[] commaSeparated = statement.Split(',');
+            // Improved regex pattern to match words, floating-point numbers, integers, and operators
+            string pattern = @"\b(?:False|True|None|and|or|not|if|else|elif|return|class|def|\d+\.\d+|\d+|[+\-*/%=\(\)\[\]{}<>!&|,.;]+|\w+)\b";
+            Regex regex = new Regex(pattern);
+            MatchCollection matches = regex.Matches(statement);
 
-            foreach (var part in commaSeparated)
+            foreach (Match match in matches)
             {
-                string trimmedPart = part.Trim();
-
-                // Regex pattern to match words, operators, numbers (including float), and symbols
-                string pattern = @"\b(?:False|True|None|and|or|not|if|else|elif|return|class|def|\w+|\d+\.\d+|\d+|[+\-*/%=\(\)\[\]{}<>!&|,.;]+)\b";
-                Regex regex = new Regex(pattern);
-                MatchCollection matches = regex.Matches(trimmedPart);
-
-                foreach (Match match in matches)
-                {
-                    tokens.Add(match.Value);
-                }
+                tokens.Add(match.Value);
             }
-
             return tokens;
         }
 
@@ -62,15 +53,18 @@ namespace CodeSense
             List<string> tokens = Tokenize(statement); // Tokenize the input statement
             StringBuilder result = new StringBuilder();
 
+            // Check if the statement is a conditional statement
+            if ((tokens.Contains("if") || tokens.Contains("elif") || tokens.Contains("else")) &&
+                (statement.Contains(">") || statement.Contains("<") || statement.Contains("==") || statement.Contains("!=") || statement.Contains(">=") || statement.Contains("<=")))
+            {
+                result.AppendLine($"{statement} is a Conditional Statement");
+                return result.ToString();
+            }
+
             foreach (var token in tokens)
             {
-                // If the token is a built-in function, classify it as a built-in function
-                if (Array.Exists(builtInFunctions, func => func == token))
-                {
-                    result.AppendLine($"{token} is a built-in function");
-                }
-                // If the token is wrapped in quotes, treat it as a string literal
-                else if (token.StartsWith("\"") && token.EndsWith("\""))
+                // Check if the token is wrapped in quotes, treating it as a string
+                if (token.StartsWith("\"") && token.EndsWith("\""))
                 {
                     result.AppendLine($"{token} is a string");
                 }
@@ -84,15 +78,30 @@ namespace CodeSense
                 {
                     result.AppendLine($"{token} is an operator");
                 }
-                // Check if it's a number (integer or floating-point)
-                else if (double.TryParse(token, out _))
+                // Check if it's a floating-point number
+                else if (double.TryParse(token, out double number) && token.Contains("."))
                 {
-                    result.AppendLine($"{token} is a number");
+                    result.AppendLine($"{token} is a floating number");
                 }
-                // Otherwise, treat it as an identifier
+                // Check if it's an integer
+                else if (int.TryParse(token, out _))
+                {
+                    result.AppendLine($"{token} is an integer");
+                }
+                // Check if it's a built-in function (like "print")
+                else if (Array.Exists(builtInFunctions, func => func == token))
+                {
+                    result.AppendLine($"{token} is a built-in function");
+                }
+                // Check if it's a data type
+                else if (Array.Exists(dataTypes, dataType => dataType == token))
+                {
+                    result.AppendLine($"{token} is a data type");
+                }
+                // Otherwise, treat it as a variable
                 else
                 {
-                    result.AppendLine($"{token} is an identifier");
+                    result.AppendLine($"{token} is a variable");
                 }
             }
             return result.ToString();
@@ -107,23 +116,21 @@ namespace CodeSense
                 FinalResult.Text = "Please enter a statement.";
                 return;
             }
-
             string result = AnalyzeStatement(inputStatement);
             FinalResult.Text = result;
-
-            // Center the FinalResult label regardless of the result length
             FinalResult.Location = new Point((ClientSize.Width - FinalResult.Width) / 2, label2.Location.Y + label2.Height + 10);
         }
 
         // Back button click event handler
         private void AnalyzeBack_Click(object sender, EventArgs e)
         {
-            // Show the LanguageSelect form
             LanguageSelect languageSelectPage = new LanguageSelect();
             languageSelectPage.Show();
-            // Hide the current AnalyzePage form
             this.Hide();
         }
+
+        // Built-in functions
+        private readonly string[] builtInFunctions = new[] { "print", "len", "type", "range", "input" };
 
         // Python Keywords
         private readonly string[] pythonKeywords = new[] { "False", "True", "None", "and", "or", "not", "if", "else", "elif", "return", "class", "def" };
@@ -131,7 +138,13 @@ namespace CodeSense
         // Operators
         private readonly string[] operators = new[] { "+", "-", "*", "/", "%", "==", "<", ">", "<=", ">=", "&&", "||", "!", "&", "|" };
 
-        // Built-in Functions
-        private readonly string[] builtInFunctions = new[] { "print", "len", "str", "int", "input", "range" };
+        // Data Types
+        private readonly string[] dataTypes = new[] { "bool", "float", "int", "str", "list", "dict", "set", "tuple" };
     }
 }
+
+
+
+
+
+
