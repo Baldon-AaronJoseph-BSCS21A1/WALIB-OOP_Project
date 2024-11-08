@@ -35,7 +35,7 @@ namespace CodeSense
                 return tokens;
             }
 
-            // Improved regex pattern to match words, floating-point numbers, integers, and operators
+            
             string pattern = @"\b(?:False|True|None|and|or|not|if|else|elif|return|class|def|\d+\.\d+|\d+|[+\-*/%=\(\)\[\]{}<>!&|,.;]+|\w+)\b";
             Regex regex = new Regex(pattern);
             MatchCollection matches = regex.Matches(statement);
@@ -98,7 +98,7 @@ namespace CodeSense
                 {
                     result.AppendLine($"{token} is a data type");
                 }
-                // Otherwise, treat it as a variable
+                // if not, treat it as a variable
                 else
                 {
                     result.AppendLine($"{token} is a variable");
